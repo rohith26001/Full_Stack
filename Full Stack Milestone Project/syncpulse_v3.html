@@ -1,0 +1,2727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncPulse — Real-Time Event Synchronization Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050810;
+    --surface: #0d1120;
+    --surface2: #141928;
+    --border: #1e2740;
+    --accent: #00f5c4;
+    --accent2: #6c63ff;
+    --accent3: #ff6b6b;
+    --accent4: #ffd93d;
+    --text: #e8eaf6;
+    --muted: #5a6a8a;
+    --glow: rgba(0,245,196,0.18);
+    --glow2: rgba(108,99,255,0.18);
+    --font-mono: 'Space Mono', monospace;
+    --font-display: 'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,245,196,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,196,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity: 0.4;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ===== HEADER ===== */
+  header {
+    position: relative;
+    z-index: 10;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: rgba(5,8,16,0.85);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo { display: flex; align-items: center; gap: 10px; }
+
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    animation: pulse-logo 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-logo {
+    0%,100% { box-shadow: 0 0 0 0 rgba(0,245,196,0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(0,245,196,0); }
+  }
+
+  .logo-icon svg { width: 18px; height: 18px; fill: #050810; }
+  .logo-text { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .logo-text span { color: var(--accent); }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .status-text { color: var(--accent); font-weight: 700; }
+  .header-meta { color: var(--muted); }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .btn-connect {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 7px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .btn-connect:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 16px rgba(0,245,196,0.4); }
+
+  /* ===== LAYOUT ===== */
+  .main {
+    position: relative;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    height: calc(100vh - 65px);
+    gap: 0;
+  }
+
+  /* ===== SIDEBAR LEFT ===== */
+  .sidebar-left {
+    border-right: 1px solid var(--border);
+    background: rgba(13,17,32,0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 10px 16px 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .section-label .section-action-btn {
+    background: rgba(0,245,196,0.12);
+    border: 1px solid rgba(0,245,196,0.3);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.2s;
+  }
+  .section-label .section-action-btn:hover { background: rgba(0,245,196,0.22); }
+
+  .section-label .section-clear-btn {
+    background: rgba(255,107,107,0.1);
+    border: 1px solid rgba(255,107,107,0.3);
+    color: var(--accent3);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.2s;
+  }
+  .section-label .section-clear-btn:hover { background: rgba(255,107,107,0.2); }
+
+  /* ===== LEFT SIDEBAR TABS ===== */
+  .left-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .left-tab {
+    flex: 1;
+    padding: 8px 4px;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+  }
+  .left-tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .left-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ===== TAB PANELS ===== */
+  .tab-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .tab-panel.active { display: flex; }
+
+  /* ===== CHANNELS PANEL ===== */
+  .channel-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .channel-list::-webkit-scrollbar { width: 4px; }
+  .channel-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .channel-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .channel-item:hover { background: rgba(0,245,196,0.05); }
+  .channel-item.active { background: rgba(0,245,196,0.08); }
+  .channel-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+  }
+
+  .channel-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .channel-name { font-size: 0.82rem; font-weight: 600; color: var(--text); flex: 1; }
+  .channel-count {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    background: var(--accent2);
+    color: white;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+  }
+  .channel-count.zero { background: transparent; color: var(--muted); }
+
+  /* ===== NODES PANEL ===== */
+  .nodes-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .nodes-list::-webkit-scrollbar { width: 4px; }
+  .nodes-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .node-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(30,39,64,0.4);
+    position: relative;
+    transition: background 0.15s;
+  }
+  .node-item:hover { background: rgba(108,99,255,0.05); }
+
+  .node-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .node-status-dot.online { background: var(--accent); box-shadow: 0 0 6px rgba(0,245,196,0.5); animation: blink 1.4s ease-in-out infinite; }
+  .node-status-dot.offline { background: var(--accent3); }
+  .node-status-dot.standby { background: var(--accent4); }
+
+  .node-info { flex: 1; min-width: 0; }
+  .node-name { font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-role { font-family: var(--font-mono); font-size: 0.6rem; color: var(--muted); }
+
+  .node-badge {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .node-badge.broker { background: rgba(0,245,196,0.12); color: var(--accent); border: 1px solid rgba(0,245,196,0.25); }
+  .node-badge.worker { background: rgba(108,99,255,0.12); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); }
+  .node-badge.gateway { background: rgba(255,217,61,0.12); color: var(--accent4); border: 1px solid rgba(255,217,61,0.25); }
+  .node-badge.replica { background: rgba(255,107,107,0.12); color: var(--accent3); border: 1px solid rgba(255,107,107,0.25); }
+
+  .node-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.15s;
+    opacity: 0;
+  }
+  .node-item:hover .node-remove { opacity: 1; }
+  .node-remove:hover { color: var(--accent3); background: rgba(255,107,107,0.1); }
+
+  /* ===== DATABASE PANEL ===== */
+  .db-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .db-list::-webkit-scrollbar { width: 4px; }
+  .db-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .db-item {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(30,39,64,0.4);
+    transition: background 0.15s;
+  }
+  .db-item:hover { background: rgba(255,217,61,0.03); }
+
+  .db-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .db-icon { font-size: 0.9rem; }
+  .db-name { font-size: 0.8rem; font-weight: 700; flex: 1; }
+  .db-type-badge {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(255,217,61,0.12);
+    color: var(--accent4);
+    border: 1px solid rgba(255,217,61,0.25);
+    text-transform: uppercase;
+  }
+  .db-stats { display: flex; gap: 12px; }
+  .db-stat { font-family: var(--font-mono); font-size: 0.62rem; color: var(--muted); }
+  .db-stat span { color: var(--text); font-weight: 700; }
+
+  .db-bar-wrap { margin-top: 6px; background: var(--border); border-radius: 2px; height: 3px; overflow: hidden; }
+  .db-bar { height: 100%; border-radius: 2px; background: linear-gradient(to right, var(--accent2), var(--accent)); transition: width 1s ease; }
+
+  /* ===== EVENTS LOG PANEL ===== */
+  .events-log-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .events-log-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .events-log-list::-webkit-scrollbar { width: 4px; }
+  .events-log-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 16px;
+    border-bottom: 1px solid rgba(30,39,64,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    animation: fadeInLog 0.3s ease;
+  }
+  @keyframes fadeInLog {
+    from { opacity: 0; background: rgba(0,245,196,0.06); }
+    to { opacity: 1; background: transparent; }
+  }
+  .log-time { color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+  .log-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .log-msg { color: var(--text); line-height: 1.4; }
+  .log-entry.log-data .log-dot { background: var(--accent); }
+  .log-entry.log-sync .log-dot { background: var(--accent2); }
+  .log-entry.log-alert .log-dot { background: var(--accent3); }
+  .log-entry.log-system .log-dot { background: var(--accent4); }
+
+  .events-log-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-align: center;
+    gap: 8px;
+  }
+
+  /* ===== STATS GRID ===== */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .stat-block { background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+  .stat-value { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* ===== CENTER PANEL ===== */
+  .center-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ===== CENTER NODE PASSING INTERFACE ===== */
+  .node-passing-center {
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,17,32,0.85);
+    padding: 10px 20px 12px;
+    flex-shrink: 0;
+  }
+  .npc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .npc-title {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .npc-live-badge {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(0,245,196,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(0,245,196,0.25);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  .npc-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .npc-flow::-webkit-scrollbar { height: 3px; }
+  .npc-flow::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .npc-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    min-width: 72px;
+    cursor: pointer;
+    position: relative;
+  }
+  .npc-node-box {
+    width: 64px;
+    height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+  }
+  .npc-node.role-broker  .npc-node-box { border-color: rgba(0,245,196,0.3); }
+  .npc-node.role-worker  .npc-node-box { border-color: rgba(108,99,255,0.3); }
+  .npc-node.role-gateway .npc-node-box { border-color: rgba(255,217,61,0.3); }
+  .npc-node.role-replica .npc-node-box { border-color: rgba(255,107,107,0.3); }
+
+  .npc-node.passing .npc-node-box { transform: scale(1.08); }
+  .npc-node.role-broker.passing  .npc-node-box { box-shadow: 0 0 18px rgba(0,245,196,0.7);  border-color: var(--accent);  background: rgba(0,245,196,0.1);  }
+  .npc-node.role-worker.passing  .npc-node-box { box-shadow: 0 0 18px rgba(108,99,255,0.7); border-color: var(--accent2); background: rgba(108,99,255,0.1); }
+  .npc-node.role-gateway.passing .npc-node-box { box-shadow: 0 0 18px rgba(255,217,61,0.7); border-color: var(--accent4); background: rgba(255,217,61,0.1); }
+  .npc-node.role-replica.passing .npc-node-box { box-shadow: 0 0 18px rgba(255,107,107,0.7);border-color: var(--accent3); background: rgba(255,107,107,0.1);}
+
+  .npc-node-icon { font-size: 0.95rem; line-height: 1; }
+  .npc-node-name {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 56px;
+    text-align: center;
+  }
+  .npc-node-label {
+    font-family: var(--font-mono);
+    font-size: 0.52rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .npc-node.offline .npc-node-box { opacity: 0.35; filter: grayscale(0.6); }
+
+  .npc-pipe {
+    flex: 1;
+    min-width: 20px;
+    height: 2px;
+    background: var(--border);
+    position: relative;
+    overflow: visible;
+    flex-shrink: 0;
+  }
+  .npc-packet {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    transition: none;
+    box-shadow: 0 0 6px currentColor;
+  }
+
+  /* ===== BOTTOM NODE DETAILS STRIP ===== */
+  .node-details-strip {
+    border-top: 1px solid var(--border);
+    background: rgba(5,8,16,0.92);
+    padding: 10px 20px;
+    flex-shrink: 0;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    align-items: stretch;
+  }
+  .node-details-strip::-webkit-scrollbar { height: 3px; }
+  .node-details-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .nd-card {
+    min-width: 134px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: border-color 0.25s, box-shadow 0.25s;
+    cursor: default;
+  }
+  .nd-card:hover { border-color: rgba(0,245,196,0.25); }
+  .nd-card.nd-active-broker  { border-color: var(--accent);  box-shadow: 0 0 10px rgba(0,245,196,0.2);  }
+  .nd-card.nd-active-worker  { border-color: var(--accent2); box-shadow: 0 0 10px rgba(108,99,255,0.2); }
+  .nd-card.nd-active-gateway { border-color: var(--accent4); box-shadow: 0 0 10px rgba(255,217,61,0.2); }
+  .nd-card.nd-active-replica { border-color: var(--accent3); box-shadow: 0 0 10px rgba(255,107,107,0.2);}
+
+  .nd-card-top { display: flex; align-items: center; gap: 6px; }
+  .nd-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .nd-dot.online  { background: var(--accent);  animation: blink 1.4s ease-in-out infinite; }
+  .nd-dot.standby { background: var(--accent4); }
+  .nd-dot.offline { background: var(--accent3); }
+
+  .nd-name { font-size: 0.76rem; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nd-role-pill {
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .nd-role-pill.broker  { background: rgba(0,245,196,0.12);  color: var(--accent);  }
+  .nd-role-pill.worker  { background: rgba(108,99,255,0.12); color: var(--accent2); }
+  .nd-role-pill.gateway { background: rgba(255,217,61,0.12); color: var(--accent4); }
+  .nd-role-pill.replica { background: rgba(255,107,107,0.12);color: var(--accent3); }
+
+  .nd-region { font-family: var(--font-mono); font-size: 0.57rem; color: var(--muted); }
+
+  .nd-stats-row { display: flex; gap: 8px; }
+  .nd-stat { font-family: var(--font-mono); font-size: 0.6rem; color: var(--muted); }
+  .nd-stat-val { font-weight: 700; }
+  .nd-stat-val.c-broker  { color: var(--accent);  }
+  .nd-stat-val.c-worker  { color: var(--accent2); }
+  .nd-stat-val.c-gateway { color: var(--accent4); }
+  .nd-stat-val.c-replica { color: var(--accent3); }
+
+  .nd-bar-row { display: flex; align-items: center; gap: 5px; }
+  .nd-bar-track { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .nd-bar-fill  { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+  .nd-bar-pct   { font-family: var(--font-mono); font-size: 0.54rem; color: var(--muted); white-space: nowrap; }
+
+  .nd-last {
+    font-family: var(--font-mono);
+    font-size: 0.57rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-top: 1px solid rgba(30,39,64,0.5);
+    padding-top: 4px;
+    margin-top: 1px;
+  }
+  .nd-last span { color: var(--text); }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(5,8,16,0.7);
+    flex-wrap: wrap;
+  }
+
+  .toolbar-title { font-size: 0.9rem; font-weight: 800; color: var(--text); flex: 1; min-width: 120px; }
+  .toolbar-title span { font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); font-weight: 400; margin-left: 8px; }
+
+  .filter-tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: 6px; padding: 3px; }
+  .filter-tab {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--muted);
+    border: none;
+    background: transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.04em;
+  }
+  .filter-tab.active { background: var(--accent2); color: white; box-shadow: 0 0 10px rgba(108,99,255,0.4); }
+
+  .btn-toggle-stream {
+    background: transparent;
+    border: 1px solid var(--accent4);
+    color: var(--accent4);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .btn-toggle-stream:hover { background: rgba(255,217,61,0.12); box-shadow: 0 0 14px rgba(255,217,61,0.3); }
+  .btn-toggle-stream.stopped { border-color: var(--accent); color: var(--accent); }
+  .btn-toggle-stream.stopped:hover { background: rgba(0,245,196,0.1); }
+
+  .btn-clear-stream {
+    background: transparent;
+    border: 1px solid rgba(255,107,107,0.4);
+    color: var(--accent3);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .btn-clear-stream:hover { background: rgba(255,107,107,0.12); box-shadow: 0 0 12px rgba(255,107,107,0.3); }
+
+  .btn-publish {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 8px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-publish:hover { box-shadow: 0 0 20px rgba(0,245,196,0.5); transform: translateY(-1px); }
+
+  /* Event stream */
+  .event-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .event-stream::-webkit-scrollbar { width: 4px; }
+  .event-stream::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .event-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: start;
+    animation: slideIn 0.35s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .event-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+  .event-card.type-data::before { background: var(--accent); }
+  .event-card.type-alert::before { background: var(--accent3); }
+  .event-card.type-sync::before { background: var(--accent2); }
+  .event-card.type-system::before { background: var(--accent4); }
+  .event-card:hover { border-color: rgba(0,245,196,0.3); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .event-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .event-icon.type-data { background: rgba(0,245,196,0.12); }
+  .event-icon.type-alert { background: rgba(255,107,107,0.12); }
+  .event-icon.type-sync { background: rgba(108,99,255,0.12); }
+  .event-icon.type-system { background: rgba(255,217,61,0.12); }
+
+  .event-body { min-width: 0; }
+  .event-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-meta { font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
+  .event-payload {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--accent);
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .event-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .event-time { font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); white-space: nowrap; }
+  .event-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .badge-data { background: rgba(0,245,196,0.15); color: var(--accent); }
+  .badge-alert { background: rgba(255,107,107,0.15); color: var(--accent3); }
+  .badge-sync { background: rgba(108,99,255,0.15); color: var(--accent2); }
+  .badge-system { background: rgba(255,217,61,0.15); color: var(--accent4); }
+
+  /* Publish bar */
+  .publish-bar {
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 10px;
+    align-items: center;
+    background: rgba(5,8,16,0.85);
+  }
+
+  .publish-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .publish-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,245,196,0.08); }
+  .publish-input::placeholder { color: var(--muted); }
+
+  .type-select, .channel-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 10px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .type-select:focus { border-color: var(--accent2); }
+
+  /* ===== SIDEBAR RIGHT ===== */
+  .sidebar-right {
+    border-left: 1px solid var(--border);
+    background: rgba(13,17,32,0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .arch-diagram { padding: 16px; border-bottom: 1px solid var(--border); }
+  .arch-title { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; }
+
+  .arch-flow { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .arch-node {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    width: 100%;
+    transition: all 0.3s;
+  }
+  .arch-node.active-node { border-color: var(--accent); box-shadow: 0 0 10px rgba(0,245,196,0.2); color: var(--accent); }
+  .arch-node.active-node2 { border-color: var(--accent2); box-shadow: 0 0 10px rgba(108,99,255,0.2); color: var(--accent2); }
+  .arch-arrow-line { height: 18px; width: 1px; background: linear-gradient(to bottom, var(--accent), var(--accent2)); margin: 0 auto; }
+
+  .subscribers-panel { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .subscriber-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(30,39,64,0.5);
+    transition: background 0.15s;
+  }
+  .subscriber-item:hover { background: rgba(0,245,196,0.03); }
+  .sub-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+  .sub-info { flex: 1; min-width: 0; }
+  .sub-name { font-size: 0.8rem; font-weight: 600; }
+  .sub-channel { font-family: var(--font-mono); font-size: 0.62rem; color: var(--muted); }
+  .sub-ping { font-family: var(--font-mono); font-size: 0.65rem; color: var(--accent); }
+
+  .activity-section { border-top: 1px solid var(--border); padding: 14px 16px; flex-shrink: 0; }
+  .activity-bars { display: flex; gap: 3px; align-items: flex-end; height: 40px; margin-top: 8px; }
+  .activity-bar { flex: 1; border-radius: 2px 2px 0 0; background: var(--border); transition: height 0.5s ease, background 0.3s; min-height: 3px; }
+  .activity-bar.active-bar { background: linear-gradient(to top, var(--accent2), var(--accent)); }
+
+  /* ===== MODALS ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,8,16,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    width: 480px;
+    max-width: 95vw;
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,245,196,0.1);
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .modal-title { font-size: 1.1rem; font-weight: 800; }
+  .modal-close { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); width: 28px; height: 28px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.2s; }
+  .modal-close:hover { color: var(--text); border-color: var(--accent3); }
+
+  .form-group { margin-bottom: 14px; }
+  .form-label { display: block; font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .form-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,245,196,0.07); }
+  .form-textarea { resize: vertical; min-height: 80px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  .btn-cancel { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--font-mono); font-size: 0.75rem; padding: 8px 18px; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+  .btn-cancel:hover { border-color: var(--muted); color: var(--text); }
+  .btn-submit { background: var(--accent2); border: none; color: white; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; padding: 8px 20px; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+  .btn-submit:hover { box-shadow: 0 0 20px rgba(108,99,255,0.5); transform: translateY(-1px); }
+
+  /* Toast */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: toastIn 0.3s cubic-bezier(0.16,1,0.3,1); display: flex; align-items: center; gap: 10px; border-left: 3px solid var(--accent); }
+  .toast.error { border-left-color: var(--accent3); }
+  .toast.warn { border-left-color: var(--accent4); }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .pulse-ring { display: inline-flex; align-items: center; justify-content: center; position: relative; }
+  .pulse-ring::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: var(--accent); animation: ringPulse 1.5s ease-out infinite; opacity: 0; }
+  @keyframes ringPulse { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(2.5); opacity: 0; } }
+
+  /* Empty state */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 40px; text-align: center; color: var(--muted); }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 14px; opacity: 0.5; }
+  .empty-title { font-size: 1rem; font-weight: 700; margin-bottom: 6px; color: var(--text); opacity: 0.5; }
+  .empty-desc { font-size: 0.8rem; line-height: 1.5; }
+
+  /* Connection overlay */
+  .connecting-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    transition: opacity 0.5s;
+  }
+  .connecting-overlay.hidden { opacity: 0; pointer-events: none; }
+  .connect-logo { font-size: 2.5rem; font-weight: 800; color: var(--accent); letter-spacing: -0.04em; }
+  .connect-bars { display: flex; gap: 6px; align-items: flex-end; height: 32px; }
+  .connect-bar { width: 6px; background: var(--accent); border-radius: 3px; animation: connectBar 0.8s ease-in-out infinite alternate; }
+  .connect-bar:nth-child(2) { animation-delay: 0.1s; }
+  .connect-bar:nth-child(3) { animation-delay: 0.2s; }
+  .connect-bar:nth-child(4) { animation-delay: 0.3s; }
+  .connect-bar:nth-child(5) { animation-delay: 0.4s; }
+  @keyframes connectBar { from { height: 6px; opacity: 0.3; } to { height: 32px; opacity: 1; } }
+  .connect-status { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; height: auto; }
+    .sidebar-left, .sidebar-right { display: none; }
+    .publish-bar { grid-template-columns: 1fr auto; }
+    .type-select, .channel-select { display: none; }
+  }
+
+  /* ===== NODE PASSING VISUALIZATION ===== */
+  .node-flow-section {
+    border-top: 1px solid var(--border);
+    padding: 10px 16px 12px;
+    flex-shrink: 0;
+  }
+  .node-flow-title {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .node-flow-canvas {
+    width: 100%;
+    height: 80px;
+    position: relative;
+    overflow: hidden;
+  }
+  .nf-node {
+    position: absolute;
+    width: 44px;
+    height: 28px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.48rem;
+    color: var(--muted);
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s, color 0.2s;
+    z-index: 2;
+  }
+  .nf-node.flash-broker  { border-color: var(--accent);  box-shadow: 0 0 10px rgba(0,245,196,0.5);  color: var(--accent);  }
+  .nf-node.flash-worker  { border-color: var(--accent2); box-shadow: 0 0 10px rgba(108,99,255,0.5); color: var(--accent2); }
+  .nf-node.flash-gateway { border-color: var(--accent4); box-shadow: 0 0 10px rgba(255,217,61,0.5); color: var(--accent4); }
+  .nf-node.flash-replica { border-color: var(--accent3); box-shadow: 0 0 10px rgba(255,107,107,0.5); color: var(--accent3); }
+  .nf-node.flash-db      { border-color: #b388ff; box-shadow: 0 0 10px rgba(179,136,255,0.5); color: #b388ff; }
+
+  .nf-packet {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    z-index: 5;
+    pointer-events: none;
+    transition: none;
+  }
+  .nf-line {
+    position: absolute;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border), transparent);
+    z-index: 1;
+    transform-origin: left center;
+  }
+
+  /* ===== NODE ITEM: passing info ===== */
+  .node-pass-count {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: var(--accent2);
+    margin-top: 1px;
+  }
+
+  /* ===== EVENT CARD: node tag ===== */
+  .event-node-tag {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(108,99,255,0.12);
+    color: var(--accent2);
+    border: 1px solid rgba(108,99,255,0.25);
+    white-space: nowrap;
+    margin-top: 3px;
+    display: inline-block;
+  }
+
+  /* ===== DB DRILL-DOWN MODAL ===== */
+  .db-modal-wide { width: 640px; max-height: 80vh; display: flex; flex-direction: column; }
+  .db-drill-header {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .db-drill-icon { font-size: 1.8rem; }
+  .db-drill-meta { flex: 1; }
+  .db-drill-name { font-size: 1rem; font-weight: 800; margin-bottom: 4px; }
+  .db-drill-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+  .db-drill-stat { font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
+  .db-drill-stat span { color: var(--accent); font-weight: 700; }
+
+  .db-drill-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .db-drill-tab {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    background: transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.04em;
+  }
+  .db-drill-tab.active { background: var(--accent2); color: white; border-color: var(--accent2); }
+
+  .db-drill-body { flex: 1; overflow-y: auto; min-height: 200px; max-height: 340px; }
+  .db-drill-body::-webkit-scrollbar { width: 4px; }
+  .db-drill-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .db-record-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 100px 70px;
+    gap: 8px;
+    padding: 7px 8px;
+    border-bottom: 1px solid rgba(30,39,64,0.5);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    align-items: center;
+    animation: fadeInLog 0.3s ease;
+    transition: background 0.15s;
+  }
+  .db-record-row:hover { background: rgba(108,99,255,0.05); }
+  .db-record-row.header {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    border-radius: 4px 4px 0 0;
+    animation: none;
+  }
+  .db-rec-id { color: var(--muted); }
+  .db-rec-event { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .db-rec-src { color: var(--accent2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .db-rec-time { color: var(--muted); text-align: right; }
+
+  .db-access-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 8px;
+    border-bottom: 1px solid rgba(30,39,64,0.4);
+    font-size: 0.78rem;
+    transition: background 0.15s;
+  }
+  .db-access-row:hover { background: rgba(0,245,196,0.03); }
+  .db-access-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .db-access-name { font-weight: 600; flex: 1; }
+  .db-access-type { font-family: var(--font-mono); font-size: 0.62rem; color: var(--muted); }
+  .db-access-perm {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .perm-rw  { background: rgba(0,245,196,0.12); color: var(--accent); border: 1px solid rgba(0,245,196,0.25); }
+  .perm-r   { background: rgba(108,99,255,0.12); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); }
+  .perm-w   { background: rgba(255,217,61,0.12); color: var(--accent4); border: 1px solid rgba(255,217,61,0.25); }
+
+  /* DB item clickable */
+  .db-item { cursor: pointer; position: relative; }
+  .db-item::after {
+    content: '⤢ Open';
+    position: absolute;
+    top: 10px; right: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .db-item:hover::after { opacity: 1; }
+
+  /* arch flow: node passing animation */
+  .arch-node-wrap { position: relative; width: 100%; }
+  .arch-pass-indicator {
+    position: absolute;
+    right: -6px; top: 50%;
+    transform: translateY(-50%);
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.1s;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .arch-pass-indicator.lit { opacity: 1; animation: passFlash 0.5s ease-out forwards; }
+  @keyframes passFlash { 0% { opacity:1; transform: translateY(-50%) scale(1.5); } 100% { opacity:0; transform: translateY(-50%) scale(0.5); } }
+</style>
+</head>
+<body>
+
+<!-- Connection splash -->
+<div class="connecting-overlay" id="connectingOverlay">
+  <div class="connect-logo">SyncPulse</div>
+  <div class="connect-bars">
+    <div class="connect-bar"></div>
+    <div class="connect-bar"></div>
+    <div class="connect-bar"></div>
+    <div class="connect-bar"></div>
+    <div class="connect-bar"></div>
+  </div>
+  <div class="connect-status" id="connectStatus">Initializing engine...</div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </div>
+    <div class="logo-text">Sync<span>Pulse</span></div>
+  </div>
+
+  <div class="status-bar">
+    <div class="pulse-ring"><div class="status-dot"></div></div>
+    <span class="status-text" id="headerStatus">LIVE</span>
+    <span class="header-meta" id="headerLatency">~12ms latency</span>
+    <span class="header-meta" id="headerEvents">0 events/min</span>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn-connect" onclick="openAddNodeModal()">+ Add Node</button>
+    <button class="btn-connect" onclick="openSubscribeModal()">+ Subscribe</button>
+  </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div class="main">
+
+  <!-- SIDEBAR LEFT: Tabbed -->
+  <aside class="sidebar-left">
+
+    <!-- Tab Bar -->
+    <div class="left-tabs">
+      <button class="left-tab active" onclick="switchLeftTab('channels', this)">Channels</button>
+      <button class="left-tab" onclick="switchLeftTab('nodes', this)">Nodes</button>
+      <button class="left-tab" onclick="switchLeftTab('database', this)">Database</button>
+      <button class="left-tab" onclick="switchLeftTab('events-log', this)">Events</button>
+    </div>
+
+    <!-- CHANNELS TAB -->
+    <div class="tab-panel active" id="tab-channels">
+      <div class="section-label">
+        <span>// Channels</span>
+      </div>
+      <div class="channel-list" id="channelList"></div>
+      <div class="stats-grid">
+        <div class="stat-block">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Total Events</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statActive">0</div>
+          <div class="stat-label">Active Subs</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statRate">0</div>
+          <div class="stat-label">Events/min</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statUptime">0s</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NODES TAB -->
+    <div class="tab-panel" id="tab-nodes">
+      <div class="section-label">
+        <span>// Nodes</span>
+        <button class="section-action-btn" onclick="openAddNodeModal()">+ Add</button>
+      </div>
+      <div class="nodes-list" id="nodesList"></div>
+      <div class="node-flow-section">
+        <div class="node-flow-title">// Live Node Traffic</div>
+        <canvas id="nodeFlowCanvas" class="node-flow-canvas" width="248" height="80"></canvas>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-block">
+          <div class="stat-value" id="statNodes">0</div>
+          <div class="stat-label">Total Nodes</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statNodesOnline">0</div>
+          <div class="stat-label">Online</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statNodesPassed">0</div>
+          <div class="stat-label">Events Passed</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statNodesStandby">0</div>
+          <div class="stat-label">Standby</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATABASE TAB -->
+    <div class="tab-panel" id="tab-database">
+      <div class="section-label">
+        <span>// Databases</span>
+        <button class="section-action-btn" onclick="openAddDbModal()">+ Add</button>
+      </div>
+      <div class="db-list" id="dbList"></div>
+      <div class="stats-grid">
+        <div class="stat-block">
+          <div class="stat-value" id="statDbRecords">0</div>
+          <div class="stat-label">DB Records</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value" id="statDbTables">0</div>
+          <div class="stat-label">Tables</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EVENTS LOG TAB -->
+    <div class="tab-panel" id="tab-events-log">
+      <div class="section-label">
+        <span>// Event Log</span>
+        <button class="section-clear-btn" onclick="clearEventLog()">✕ Clear</button>
+      </div>
+      <div class="events-log-section">
+        <div class="events-log-list" id="eventsLogList">
+          <div class="events-log-empty" id="eventsLogEmpty">
+            <span>📋</span>
+            <span>No events logged yet</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- CENTER: Event Stream -->
+  <main class="center-panel">
+    <div class="toolbar">
+      <div class="toolbar-title">
+        Event Stream
+        <span id="activeChannel">all channels</span>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="setFilter('all', this)">ALL</button>
+        <button class="filter-tab" onclick="setFilter('data', this)">DATA</button>
+        <button class="filter-tab" onclick="setFilter('sync', this)">SYNC</button>
+        <button class="filter-tab" onclick="setFilter('alert', this)">ALERT</button>
+        <button class="filter-tab" onclick="setFilter('system', this)">SYS</button>
+      </div>
+      <button id="toggleStreamBtn" class="btn-toggle-stream" onclick="toggleStream()">⏸ Pause</button>
+      <button class="btn-clear-stream" onclick="clearEventStream()">✕ Clear</button>
+      <button class="btn-publish" onclick="openPublishModal()">⚡ Publish Event</button>
+    </div>
+
+    <!-- NODE PASSING: center interface -->
+    <div class="node-passing-center" id="nodePassing">
+      <div class="npc-header">
+        <span class="npc-title">// Node Passing — Live Event Route</span>
+        <span class="npc-live-badge" id="npcLastEvent">● waiting…</span>
+      </div>
+      <div class="npc-flow" id="npcFlow">
+        <!-- rendered by JS -->
+      </div>
+    </div>
+
+    <div class="event-stream" id="eventStream">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">⚡</div>
+        <div class="empty-title">Waiting for events</div>
+        <div class="empty-desc">Events will appear here in real-time as they are published to subscribed channels</div>
+      </div>
+    </div>
+
+    <!-- NODE DETAILS STRIP: bottom of center -->
+    <div class="node-details-strip" id="nodeDetailsStrip">
+      <!-- rendered by JS -->
+    </div>
+
+    <div class="publish-bar">
+      <input class="publish-input" id="quickPayload" placeholder='{"key": "value"} — quick publish payload...' />
+      <select class="type-select" id="quickType">
+        <option value="data">DATA</option>
+        <option value="sync">SYNC</option>
+        <option value="alert">ALERT</option>
+        <option value="system">SYSTEM</option>
+      </select>
+      <select class="channel-select" id="quickChannel">
+        <option value="global">global</option>
+      </select>
+      <button class="btn-publish" onclick="quickPublish()">SEND →</button>
+    </div>
+  </main>
+
+  <!-- SIDEBAR RIGHT: Architecture + Subscribers -->
+  <aside class="sidebar-right">
+    <div class="section-label"><span>// Architecture Flow</span></div>
+    <div class="arch-diagram">
+      <div class="arch-title">System Architecture</div>
+      <div class="arch-flow">
+        <div class="arch-node-wrap">
+          <div class="arch-node active-node" id="archPublisher">📡 Publisher Client</div>
+          <div class="arch-pass-indicator" id="pass-publisher"></div>
+        </div>
+        <div class="arch-arrow-line"></div>
+        <div class="arch-node" style="font-size:0.68rem; color: var(--muted)">HTTP POST /events</div>
+        <div class="arch-arrow-line"></div>
+        <div class="arch-node-wrap">
+          <div class="arch-node active-node" id="archBroker">⚡ Event Broker</div>
+          <div class="arch-pass-indicator" id="pass-broker"></div>
+        </div>
+        <div class="arch-arrow-line"></div>
+        <div class="arch-node" style="font-size:0.68rem; color: var(--muted)">WebSocket Push (SSE)</div>
+        <div class="arch-arrow-line"></div>
+        <div class="arch-node-wrap">
+          <div class="arch-node active-node2" id="archSubscribers">👥 Subscribers</div>
+          <div class="arch-pass-indicator" id="pass-subscribers" style="background:var(--accent2); box-shadow: 0 0 8px var(--accent2)"></div>
+        </div>
+        <div class="arch-arrow-line"></div>
+        <div class="arch-node" style="font-size:0.68rem; color: var(--muted)">Persistent Storage</div>
+        <div class="arch-arrow-line"></div>
+        <div class="arch-node-wrap">
+          <div class="arch-node active-node2" id="archDb" style="cursor:pointer;" onclick="openFirstDb()">🗄️ Event Log (DB) <span style="font-size:0.55rem;color:var(--muted)">↗</span></div>
+          <div class="arch-pass-indicator" id="pass-db" style="background:#b388ff; box-shadow: 0 0 8px #b388ff"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label"><span>// Connected Subscribers</span></div>
+    <div class="subscribers-panel" id="subscribersPanel"></div>
+
+    <div class="activity-section">
+      <div class="section-label" style="padding: 0; margin-bottom: 4px;">// Event Activity (60s)</div>
+      <div class="activity-bars" id="activityBars"></div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- PUBLISH MODAL -->
+<div class="modal-overlay" id="publishModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚡ Publish Event</div>
+      <button class="modal-close" onclick="closeModal('publishModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Event Name</label>
+      <input class="form-input" id="pubEventName" placeholder="user.login / order.placed / data.sync..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Channel</label>
+      <select class="form-input" id="pubChannel"><option value="global">global</option></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Event Type</label>
+      <select class="form-input" id="pubType">
+        <option value="data">DATA</option>
+        <option value="sync">SYNC</option>
+        <option value="alert">ALERT</option>
+        <option value="system">SYSTEM</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Payload (JSON)</label>
+      <textarea class="form-input form-textarea" id="pubPayload" placeholder='{"userId": "u_123", "action": "login"}'></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Priority</label>
+      <select class="form-input" id="pubPriority">
+        <option value="normal">Normal</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('publishModal')">Cancel</button>
+      <button class="btn-submit" onclick="publishEvent()">Publish →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBSCRIBE MODAL -->
+<div class="modal-overlay" id="subscribeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📡 Subscribe to Channel</div>
+      <button class="modal-close" onclick="closeModal('subscribeModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Subscriber Name</label>
+      <input class="form-input" id="subName" placeholder="Service-A / Dashboard-1 / Monitor..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Channel Name</label>
+      <input class="form-input" id="subChannelName" placeholder="analytics / payments / logs..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Channel Color</label>
+      <select class="form-input" id="subColor">
+        <option value="#00f5c4">Teal (default)</option>
+        <option value="#6c63ff">Purple</option>
+        <option value="#ff6b6b">Red</option>
+        <option value="#ffd93d">Yellow</option>
+        <option value="#4ecdc4">Cyan</option>
+        <option value="#ff9f43">Orange</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('subscribeModal')">Cancel</button>
+      <button class="btn-submit" onclick="addSubscriber()">Subscribe →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD NODE MODAL -->
+<div class="modal-overlay" id="addNodeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🖥️ Add Node</div>
+      <button class="modal-close" onclick="closeModal('addNodeModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Node Name</label>
+      <input class="form-input" id="nodeName" placeholder="broker-01 / worker-03 / gateway-eu..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Node Role</label>
+      <select class="form-input" id="nodeRole">
+        <option value="broker">Broker</option>
+        <option value="worker">Worker</option>
+        <option value="gateway">Gateway</option>
+        <option value="replica">Replica</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Initial Status</label>
+      <select class="form-input" id="nodeStatus">
+        <option value="online">Online</option>
+        <option value="standby">Standby</option>
+        <option value="offline">Offline</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Region / Tag (optional)</label>
+      <input class="form-input" id="nodeRegion" placeholder="us-east-1 / eu-west-2 / ap-south-1..." />
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('addNodeModal')">Cancel</button>
+      <button class="btn-submit" onclick="addNode()">Add Node →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DATABASE MODAL -->
+<div class="modal-overlay" id="addDbModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🗄️ Add Database</div>
+      <button class="modal-close" onclick="closeModal('addDbModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Database Name</label>
+      <input class="form-input" id="dbName" placeholder="events_store / analytics_db / logs..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select class="form-input" id="dbType">
+        <option value="PostgreSQL">PostgreSQL</option>
+        <option value="MongoDB">MongoDB</option>
+        <option value="Redis">Redis</option>
+        <option value="ClickHouse">ClickHouse</option>
+        <option value="Cassandra">Cassandra</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Initial Record Count</label>
+      <input class="form-input" id="dbRecords" placeholder="0" type="number" min="0" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('addDbModal')">Cancel</button>
+      <button class="btn-submit" onclick="addDatabase()">Add Database →</button>
+    </div>
+  </div>
+</div>
+
+<!-- DB DRILL-DOWN MODAL -->
+<div class="modal-overlay" id="dbDrillModal">
+  <div class="modal db-modal-wide">
+    <div class="modal-header">
+      <div class="modal-title" id="dbDrillTitle">🗄️ Database</div>
+      <button class="modal-close" onclick="closeModal('dbDrillModal')">✕</button>
+    </div>
+    <div class="db-drill-header">
+      <div class="db-drill-icon" id="dbDrillIcon">🐘</div>
+      <div class="db-drill-meta">
+        <div class="db-drill-name" id="dbDrillName">—</div>
+        <div class="db-drill-stats">
+          <div class="db-drill-stat">Records: <span id="dbDrillRecords">—</span></div>
+          <div class="db-drill-stat">Tables: <span id="dbDrillTables">—</span></div>
+          <div class="db-drill-stat">Usage: <span id="dbDrillUsage">—</span></div>
+          <div class="db-drill-stat">Type: <span id="dbDrillType">—</span></div>
+          <div class="db-drill-stat">Writers: <span id="dbDrillWriters">—</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="db-drill-tabs">
+      <button class="db-drill-tab active" onclick="switchDbTab('records', this)">📋 Records</button>
+      <button class="db-drill-tab" onclick="switchDbTab('access', this)">🔐 Access / Who Has Data</button>
+      <button class="db-drill-tab" onclick="switchDbTab('nodes', this)">🖥️ Writing Nodes</button>
+    </div>
+    <div class="db-drill-body" id="dbDrillBody"></div>
+    <div class="modal-footer" style="margin-top:12px;">
+      <button class="btn-cancel" onclick="closeModal('dbDrillModal')">Close</button>
+      <button class="btn-submit" style="background:var(--accent4);color:var(--bg);" onclick="exportDbData()">⬇ Export Data</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// =============================================
+// SYNCPULSE — Real-Time Event Synchronization Engine
+// Enhanced v2: Node Passing + DB Drill-Down
+// =============================================
+
+// ===== STATE =====
+const STATE = {
+  events: [],
+  channels: [
+    { id: 'global',    name: 'global',    color: '#00f5c4', count: 0, active: true },
+    { id: 'analytics', name: 'analytics', color: '#6c63ff', count: 0, active: false },
+    { id: 'payments',  name: 'payments',  color: '#ffd93d', count: 0, active: false },
+    { id: 'alerts',    name: 'alerts',    color: '#ff6b6b', count: 0, active: false },
+  ],
+  subscribers: [
+    { id: 'sub_1', name: 'Dashboard-UI',  channel: 'global',    color: '#00f5c4', ping: 8  },
+    { id: 'sub_2', name: 'Analytics-Svc', channel: 'analytics', color: '#6c63ff', ping: 22 },
+    { id: 'sub_3', name: 'AlertMonitor',  channel: 'alerts',    color: '#ff6b6b', ping: 5  },
+  ],
+  nodes: [
+    { id: 'node_1', name: 'broker-01',   role: 'broker',  status: 'online',  region: 'us-east-1',  passPct: 0 },
+    { id: 'node_2', name: 'worker-01',   role: 'worker',  status: 'online',  region: 'us-east-1',  passPct: 0 },
+    { id: 'node_3', name: 'worker-02',   role: 'worker',  status: 'standby', region: 'eu-west-2',  passPct: 0 },
+    { id: 'node_4', name: 'gateway-eu',  role: 'gateway', status: 'online',  region: 'eu-west-2',  passPct: 0 },
+    { id: 'node_5', name: 'replica-01',  role: 'replica', status: 'online',  region: 'ap-south-1', passPct: 0 },
+  ],
+  databases: [
+    { id: 'db_1', name: 'events_store', type: 'PostgreSQL', records: 48320, tables: 12, usagePct: 72 },
+    { id: 'db_2', name: 'analytics_db', type: 'ClickHouse', records: 210480, tables: 7,  usagePct: 45 },
+    { id: 'db_3', name: 'cache_layer',  type: 'Redis',      records: 5621,   tables: 3,  usagePct: 18 },
+  ],
+  // per-DB record history: {evName, channel, nodeId, nodeName, timestamp}
+  dbRecords: { db_1: [], db_2: [], db_3: [] },
+  eventLog: [],
+  filter: 'all',
+  activeChannel: 'all',
+  totalEvents: 0,
+  totalNodePassed: 0,
+  startTime: Date.now(),
+  activityData: new Array(20).fill(0),
+  autoEventTimer: null,
+  paused: false,
+  // for drill-down modal
+  activeDrillDbId: null,
+  activeDrillTab: 'records',
+  // canvas animation packets
+  nfPackets: [],
+  nfAnimFrame: null,
+};
+
+const ICONS = { data: '📦', sync: '🔄', alert: '🚨', system: '⚙️' };
+
+const SAMPLE_EVENTS = [
+  { name: 'user.login',          channel: 'global',    type: 'sync',   payload: '{"userId":"u_4821","device":"chrome","ip":"192.168.1.x"}' },
+  { name: 'payment.processed',   channel: 'payments',  type: 'data',   payload: '{"orderId":"ord_992","amount":149.99,"currency":"USD"}' },
+  { name: 'db.sync.complete',    channel: 'analytics', type: 'sync',   payload: '{"records":1024,"duration":"234ms","table":"events"}' },
+  { name: 'threshold.exceeded',  channel: 'alerts',    type: 'alert',  payload: '{"metric":"cpu","value":87.4,"threshold":80}' },
+  { name: 'data.pipeline.tick',  channel: 'analytics', type: 'data',   payload: '{"batch":422,"rows":8192,"latency":"11ms"}' },
+  { name: 'cache.invalidated',   channel: 'global',    type: 'system', payload: '{"keys":["user:profile","session:*"],"reason":"deploy"}' },
+  { name: 'order.placed',        channel: 'payments',  type: 'data',   payload: '{"orderId":"ord_993","items":3,"total":59.97}' },
+  { name: 'health.check.fail',   channel: 'alerts',    type: 'alert',  payload: '{"service":"payment-api","endpoint":"/v1/charge","code":503}' },
+  { name: 'ws.reconnect',        channel: 'global',    type: 'system', payload: '{"clientId":"c_7123","attempt":1,"reason":"timeout"}' },
+  { name: 'metrics.report',      channel: 'analytics', type: 'data',   payload: '{"p99":"22ms","p95":"14ms","rps":340,"errors":0}' },
+];
+
+// ===== INIT =====
+function init() {
+  const statuses = ['Initializing engine...','Loading channels...','Connecting broker...','Registering subscribers...','Mounting nodes...','Ready!'];
+  let i = 0;
+  const iv = setInterval(() => {
+    document.getElementById('connectStatus').textContent = statuses[i++];
+    if (i >= statuses.length) {
+      clearInterval(iv);
+      setTimeout(() => {
+        document.getElementById('connectingOverlay').classList.add('hidden');
+        start();
+      }, 300);
+    }
+  }, 400);
+}
+
+function start() {
+  // Seed initial DB records from nodes
+  const seedNodes = ['broker-01', 'worker-01', 'gateway-eu'];
+  const seedEvents = [
+    { evName:'system.boot',     channel:'global',    type:'system' },
+    { evName:'db.sync.start',   channel:'analytics', type:'sync'   },
+    { evName:'cache.warm',      channel:'global',    type:'system' },
+    { evName:'index.rebuild',   channel:'analytics', type:'data'   },
+    { evName:'health.check.ok', channel:'alerts',    type:'sync'   },
+  ];
+  const now = new Date();
+  seedEvents.forEach((se, i) => {
+    const nodeName = seedNodes[i % seedNodes.length];
+    const rec = {
+      recId:    'rec_seed' + i,
+      evName:   se.evName,
+      channel:  se.channel,
+      nodeId:   null,
+      nodeName,
+      time:     new Date(now - (seedEvents.length - i) * 8000).toLocaleTimeString('en-US',{hour12:false}),
+      payload:  '{}',
+    };
+    STATE.databases.forEach(db => {
+      if (!STATE.dbRecords[db.id]) STATE.dbRecords[db.id] = [];
+      STATE.dbRecords[db.id].push(rec);
+    });
+  });
+
+  renderChannels();
+  renderSubscribers();
+  renderNodes();
+  renderDatabases();
+  renderNodePassingCenter(null);
+  renderNodeDetailsStrip(null);
+  updateChannelSelects();
+  initActivityBars();
+  updateStats();
+  showToast('SyncPulse engine started — WebSocket simulation active', 'success');
+
+  setTimeout(() => injectEvent(SAMPLE_EVENTS[8]), 600);
+  setTimeout(() => injectEvent(SAMPLE_EVENTS[2]), 1200);
+  setTimeout(() => injectEvent(SAMPLE_EVENTS[0]), 1900);
+
+  STATE.autoEventTimer = setInterval(autoEvent, 3200);
+  setInterval(updateUptime, 1000);
+  setInterval(updateLatency, 2000);
+  setInterval(updateActivityBars, 3000);
+  setInterval(updateDatabaseStats, 5000);
+}
+
+// ===== LEFT TAB SWITCHING =====
+function switchLeftTab(tabId, btn) {
+  document.querySelectorAll('.left-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+}
+
+// ===== CHANNELS =====
+function renderChannels() {
+  const list = document.getElementById('channelList');
+  list.innerHTML = `
+    <div class="channel-item ${STATE.activeChannel === 'all' ? 'active' : ''}" onclick="selectChannel('all', this)">
+      <div class="channel-color" style="background:#5a6a8a"></div>
+      <div class="channel-name">All Channels</div>
+      <div class="channel-count ${STATE.totalEvents === 0 ? 'zero' : ''}">${STATE.totalEvents}</div>
+    </div>
+    ${STATE.channels.map(ch => `
+      <div class="channel-item ${STATE.activeChannel === ch.id ? 'active' : ''}" onclick="selectChannel('${ch.id}', this)">
+        <div class="channel-color" style="background:${ch.color}"></div>
+        <div class="channel-name">${ch.name}</div>
+        <div class="channel-count ${ch.count === 0 ? 'zero' : ''}">${ch.count}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function selectChannel(id, el) {
+  STATE.activeChannel = id;
+  document.querySelectorAll('.channel-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('activeChannel').textContent = id === 'all' ? 'all channels' : `#${id}`;
+  renderEventStream();
+}
+
+// ===== NODES =====
+function renderNodes() {
+  const list = document.getElementById('nodesList');
+  if (STATE.nodes.length === 0) {
+    list.innerHTML = '<div style="padding:20px 16px; text-align:center; font-family:var(--font-mono); font-size:0.7rem; color:var(--muted)">No nodes added yet</div>';
+  } else {
+    list.innerHTML = STATE.nodes.map(n => `
+      <div class="node-item" id="nitem_${n.id}">
+        <div class="node-status-dot ${n.status}"></div>
+        <div class="node-info">
+          <div class="node-name">${n.name}</div>
+          <div class="node-role">${n.region || n.role}</div>
+          <div class="node-pass-count" id="npass_${n.id}">⇄ ${n.passPct || 0} events passed</div>
+        </div>
+        <div class="node-badge ${n.role}">${n.role}</div>
+        <button class="node-remove" onclick="removeNode('${n.id}')" title="Remove node">✕</button>
+      </div>
+    `).join('');
+  }
+  const online  = STATE.nodes.filter(n => n.status === 'online').length;
+  const standby = STATE.nodes.filter(n => n.status === 'standby').length;
+  document.getElementById('statNodes').textContent      = STATE.nodes.length;
+  document.getElementById('statNodesOnline').textContent = online;
+  document.getElementById('statNodesPassed').textContent = STATE.totalNodePassed;
+  document.getElementById('statNodesStandby').textContent = standby;
+  drawNodeFlowCanvas();
+}
+
+function addNode() {
+  const name   = document.getElementById('nodeName').value.trim();
+  const role   = document.getElementById('nodeRole').value;
+  const status = document.getElementById('nodeStatus').value;
+  const region = document.getElementById('nodeRegion').value.trim();
+
+  if (!name) { showToast('Node name is required', 'error'); return; }
+
+  const node = {
+    id: 'node_' + Math.random().toString(36).slice(2,6),
+    name, role, status, region, passPct: 0
+  };
+  STATE.nodes.push(node);
+  // Give new DB entry space
+  STATE.dbRecords[node.id] = [];
+  renderNodes();
+  renderNodePassingCenter(null);
+  renderNodeDetailsStrip(null);
+  closeModal('addNodeModal');
+  showToast(`Node "${name}" added as ${role}`, 'success');
+  addLogEntry('system', `Node "${name}" registered as ${role} [${status}]`);
+
+  document.getElementById('nodeName').value = '';
+  document.getElementById('nodeRegion').value = '';
+}
+
+function removeNode(id) {
+  const node = STATE.nodes.find(n => n.id === id);
+  STATE.nodes = STATE.nodes.filter(n => n.id !== id);
+  renderNodes();
+  renderNodePassingCenter(null);
+  renderNodeDetailsStrip(null);
+  if (node) showToast(`Node "${node.name}" removed`, 'warn');
+}
+
+// ===== NODE PASSING — CENTER INTERFACE =====
+const ROLE_ICONS = { broker: '⚡', worker: '⚙️', gateway: '🌐', replica: '🔁' };
+const ROLE_COLORS_MAP = { broker: '#00f5c4', worker: '#6c63ff', gateway: '#ffd93d', replica: '#ff6b6b' };
+
+function renderNodePassingCenter(activeChain) {
+  const flow = document.getElementById('npcFlow');
+  if (!flow) return;
+  const nodes = STATE.nodes;
+  if (nodes.length === 0) {
+    flow.innerHTML = '<span style="font-family:var(--font-mono);font-size:0.7rem;color:var(--muted);padding:4px 0;">No nodes registered — add nodes to see live passing</span>';
+    return;
+  }
+
+  let html = '';
+  nodes.forEach((n, i) => {
+    const isActive  = activeChain && activeChain.some(c => c.id === n.id);
+    const roleColor = ROLE_COLORS_MAP[n.role] || '#5a6a8a';
+    const passClass = isActive ? 'passing' : '';
+    const offClass  = n.status === 'offline' ? 'offline' : '';
+
+    html += `
+      <div class="npc-node role-${n.role} ${passClass} ${offClass}" id="npcNode_${n.id}">
+        <div class="npc-node-box">
+          <span class="npc-node-icon">${ROLE_ICONS[n.role] || '🖥️'}</span>
+          <span class="npc-node-name">${n.name}</span>
+        </div>
+        <span class="npc-node-label" style="color:${n.status==='online'?roleColor:'var(--muted)'}">${n.role}</span>
+      </div>`;
+
+    if (i < nodes.length - 1) {
+      const pipeId = `pipe_${n.id}_${nodes[i+1].id}`;
+      html += `<div class="npc-pipe" id="${pipeId}"><div class="npc-pipe-inner"></div><div class="npc-packet" id="pkt_${pipeId}"></div></div>`;
+    }
+  });
+
+  // Add DB endpoint
+  const firstDb = STATE.databases[0];
+  if (firstDb) {
+    const dbActive = activeChain && activeChain.length > 0;
+    html += `
+      <div class="npc-pipe" id="pipe_to_db"><div class="npc-pipe-inner"></div><div class="npc-packet" id="pkt_pipe_to_db"></div></div>
+      <div class="npc-node role-broker ${dbActive ? 'passing' : ''}" id="npcNodeDb" onclick="openDbDrill('${firstDb.id}')" style="cursor:pointer;">
+        <div class="npc-node-box" style="border-color:rgba(179,136,255,0.4); ${dbActive?'box-shadow:0 0 18px rgba(179,136,255,0.6);border-color:#b388ff;background:rgba(179,136,255,0.1);':''}" >
+          <span class="npc-node-icon">🗄️</span>
+          <span class="npc-node-name">${firstDb.name}</span>
+        </div>
+        <span class="npc-node-label" style="color:#b388ff;">database</span>
+      </div>`;
+  }
+
+  flow.innerHTML = html;
+}
+
+function flashNodePassingChain(chain) {
+  const nodes = STATE.nodes;
+  // Flash each node in chain sequentially
+  chain.forEach((n, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(`npcNode_${n.id}`);
+      if (!el) return;
+      el.classList.add('passing');
+      // Animate packet on pipe to next node
+      const nextNode = chain[i + 1] || null;
+      const pipeTarget = nextNode
+        ? `pipe_${n.id}_${nextNode.id}`
+        : (STATE.databases[0] ? 'pipe_to_db' : null);
+      if (pipeTarget) animatePipePacket(pipeTarget, n.role);
+      setTimeout(() => el.classList.remove('passing'), 600);
+    }, i * 250);
+  });
+
+  // Flash DB endpoint at end
+  setTimeout(() => {
+    const dbEl = document.getElementById('npcNodeDb');
+    if (dbEl) {
+      dbEl.classList.add('passing');
+      setTimeout(() => dbEl.classList.remove('passing'), 600);
+    }
+  }, chain.length * 250);
+}
+
+function animatePipePacket(pipeId, role) {
+  const pipe = document.getElementById(pipeId);
+  if (!pipe) return;
+  const pkt  = document.getElementById('pkt_' + pipeId);
+  if (!pkt) return;
+
+  const col = ROLE_COLORS_MAP[role] || '#00f5c4';
+  pkt.style.background = col;
+  pkt.style.color = col;
+  pkt.style.left  = '0%';
+  pkt.style.opacity = '1';
+
+  let progress = 0;
+  const step = () => {
+    progress += 0.05;
+    pkt.style.left = (progress * 100) + '%';
+    if (progress < 1) requestAnimationFrame(step);
+    else { pkt.style.opacity = '0'; pkt.style.left = '0%'; }
+  };
+  requestAnimationFrame(step);
+}
+
+// ===== BOTTOM NODE DETAILS STRIP =====
+function renderNodeDetailsStrip(activeNodeId) {
+  const strip = document.getElementById('nodeDetailsStrip');
+  if (!strip) return;
+  if (STATE.nodes.length === 0) {
+    strip.innerHTML = `<div style="font-family:var(--font-mono);font-size:0.7rem;color:var(--muted);padding:4px 0;">No nodes — use "+ Add Node" to register nodes</div>`;
+    return;
+  }
+
+  const totalPassed = STATE.totalNodePassed || 1;
+  strip.innerHTML = STATE.nodes.map(n => {
+    const col       = ROLE_COLORS_MAP[n.role] || '#5a6a8a';
+    const pct       = Math.round(((n.passPct || 0) / totalPassed) * 100);
+    const isActive  = n.id === activeNodeId;
+    const activeClass = isActive ? `nd-active-${n.role}` : '';
+    const lastEv    = (n.lastEvent) ? n.lastEvent : '—';
+
+    return `
+      <div class="nd-card ${activeClass}" id="ndCard_${n.id}">
+        <div class="nd-card-top">
+          <div class="nd-dot ${n.status}"></div>
+          <div class="nd-name">${n.name}</div>
+          <div class="nd-role-pill ${n.role}">${n.role}</div>
+        </div>
+        <div class="nd-region">${n.region || 'local'} · ${n.status}</div>
+        <div class="nd-stats-row">
+          <div class="nd-stat">passed: <span class="nd-stat-val c-${n.role}">${n.passPct || 0}</span></div>
+          <div class="nd-stat">share: <span class="nd-stat-val c-${n.role}">${pct}%</span></div>
+        </div>
+        <div class="nd-bar-row">
+          <div class="nd-bar-track">
+            <div class="nd-bar-fill" style="width:${pct}%; background:${col};"></div>
+          </div>
+          <span class="nd-bar-pct">${pct}%</span>
+        </div>
+        <div class="nd-last">last: <span>${lastEv}</span></div>
+      </div>`;
+  }).join('');
+}
+function drawNodeFlowCanvas() {
+  const canvas = document.getElementById('nodeFlowCanvas');
+  if (!canvas) return;
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 248;
+  const H = 80;
+  canvas.width  = W;
+  canvas.height = H;
+
+  const onlineNodes = STATE.nodes.filter(n => n.status !== 'offline');
+  if (onlineNodes.length === 0) {
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#5a6a8a';
+    ctx.font = '10px monospace';
+    ctx.fillText('No online nodes', W/2 - 40, H/2);
+    return;
+  }
+
+  ctx.clearRect(0,0,W,H);
+
+  const ROLE_COLORS = { broker: '#00f5c4', worker: '#6c63ff', gateway: '#ffd93d', replica: '#ff6b6b' };
+  const maxShow = Math.min(onlineNodes.length, 5);
+  const nodes   = onlineNodes.slice(0, maxShow);
+  const nodeW   = 44, nodeH = 20;
+  const cols    = Math.min(maxShow, 3);
+  const rows    = Math.ceil(maxShow / cols);
+  const xStep   = W / (cols + 1);
+  const yStep   = H / (rows + 1);
+
+  // Assign positions
+  const positions = nodes.map((n, i) => ({
+    x: xStep * ((i % cols) + 1),
+    y: yStep * (Math.floor(i / cols) + 1),
+    node: n
+  }));
+
+  // Draw connection lines
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < positions.length - 1; i++) {
+    const a = positions[i], b = positions[i+1];
+    const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+    grad.addColorStop(0, 'rgba(0,245,196,0.25)');
+    grad.addColorStop(1, 'rgba(108,99,255,0.25)');
+    ctx.strokeStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  // Connect last to first (ring)
+  if (positions.length > 2) {
+    const a = positions[positions.length-1], b = positions[0];
+    ctx.strokeStyle = 'rgba(255,217,61,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  // Draw nodes
+  positions.forEach(({x, y, node}) => {
+    const col = ROLE_COLORS[node.role] || '#5a6a8a';
+    ctx.fillStyle = '#141928';
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.2;
+    const bx = x - nodeW/2, by = y - nodeH/2;
+    roundRect(ctx, bx, by, nodeW, nodeH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = col;
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(node.name.length > 8 ? node.name.slice(0,8) : node.name, x, y - 1);
+    ctx.fillStyle = '#5a6a8a';
+    ctx.font = '6px monospace';
+    ctx.fillText(node.role, x, y + 7);
+  });
+
+  // Draw animated packets
+  STATE.nfPackets.forEach(p => {
+    const fromP = positions[p.from % positions.length];
+    const toP   = positions[p.to   % positions.length];
+    if (!fromP || !toP) return;
+    const px = fromP.x + (toP.x - fromP.x) * p.t;
+    const py = fromP.y + (toP.y - fromP.y) * p.t;
+    const col = ROLE_COLORS[p.role] || '#00f5c4';
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI*2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI*2);
+    ctx.fillStyle = col + '44';
+    ctx.fill();
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function animateNodePacket(fromIdx, toIdx, role) {
+  const p = { from: fromIdx, to: toIdx, role, t: 0 };
+  STATE.nfPackets.push(p);
+  const step = () => {
+    p.t += 0.06;
+    drawNodeFlowCanvas();
+    if (p.t < 1) requestAnimationFrame(step);
+    else {
+      STATE.nfPackets = STATE.nfPackets.filter(x => x !== p);
+      drawNodeFlowCanvas();
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+// ===== NODE PASSING: called on every event =====
+function passEventThroughNodes(ev) {
+  const online = STATE.nodes.filter(n => n.status === 'online');
+  if (online.length === 0) return null;
+
+  // gateway → broker → worker chain
+  const gateway = online.find(n => n.role === 'gateway') || online[0];
+  const broker  = online.find(n => n.role === 'broker')  || online[Math.min(1, online.length-1)];
+  const worker  = online.find(n => n.role === 'worker' && n.id !== broker.id) || online[online.length - 1];
+
+  const chain  = [gateway, broker, worker].filter(Boolean);
+  const unique = [...new Map(chain.map(n => [n.id, n])).values()];
+
+  // Increment pass counts + record last event name
+  unique.forEach(n => {
+    n.passPct = (n.passPct || 0) + 1;
+    n.lastEvent = ev.name;
+  });
+  STATE.totalNodePassed++;
+
+  // Update center passing UI: re-render with active chain then animate
+  renderNodePassingCenter(unique);
+  flashNodePassingChain(unique);
+
+  // Update badge text
+  const badge = document.getElementById('npcLastEvent');
+  if (badge) badge.textContent = `● ${ev.name}`;
+
+  // Flash arch pass indicators (right sidebar)
+  ['publisher','broker','subscribers','db'].forEach((s, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(`pass-${s}`);
+      if (el) { el.classList.add('lit'); setTimeout(() => el.classList.remove('lit'), 500); }
+    }, i * 180);
+  });
+
+  // Update bottom detail strip — highlight the last processor
+  const processor = unique[unique.length - 1];
+  setTimeout(() => renderNodeDetailsStrip(processor ? processor.id : null), 300);
+
+  // Update left sidebar node list too
+  setTimeout(() => renderNodes(), 800);
+
+  return processor;
+}
+
+// ===== DATABASES =====
+function renderDatabases() {
+  const list = document.getElementById('dbList');
+  const DB_ICONS = { PostgreSQL: '🐘', MongoDB: '🍃', Redis: '🔴', ClickHouse: '📊', Cassandra: '💎' };
+  if (STATE.databases.length === 0) {
+    list.innerHTML = '<div style="padding:20px 16px; text-align:center; font-family:var(--font-mono); font-size:0.7rem; color:var(--muted)">No databases connected</div>';
+  } else {
+    list.innerHTML = STATE.databases.map(db => `
+      <div class="db-item" onclick="openDbDrill('${db.id}')">
+        <div class="db-header">
+          <span class="db-icon">${DB_ICONS[db.type] || '🗄️'}</span>
+          <span class="db-name">${db.name}</span>
+          <span class="db-type-badge">${db.type}</span>
+        </div>
+        <div class="db-stats">
+          <div class="db-stat">Records: <span>${db.records.toLocaleString()}</span></div>
+          <div class="db-stat">Tables: <span>${db.tables}</span></div>
+          <div class="db-stat">Usage: <span>${db.usagePct}%</span></div>
+        </div>
+        <div class="db-bar-wrap">
+          <div class="db-bar" style="width:${db.usagePct}%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+  const totalRecords = STATE.databases.reduce((a, d) => a + d.records, 0);
+  const totalTables  = STATE.databases.reduce((a, d) => a + d.tables, 0);
+  document.getElementById('statDbRecords').textContent = (totalRecords / 1000).toFixed(1) + 'k';
+  document.getElementById('statDbTables').textContent  = totalTables;
+}
+
+function addDatabase() {
+  const name    = document.getElementById('dbName').value.trim();
+  const type    = document.getElementById('dbType').value;
+  const records = parseInt(document.getElementById('dbRecords').value) || 0;
+
+  if (!name) { showToast('Database name is required', 'error'); return; }
+
+  const id = 'db_' + Math.random().toString(36).slice(2,6);
+  STATE.databases.push({
+    id, name, type, records, tables: Math.floor(Math.random() * 10) + 1, usagePct: Math.floor(Math.random() * 30) + 5
+  });
+  STATE.dbRecords[id] = [];
+  renderDatabases();
+  closeModal('addDbModal');
+  showToast(`Database "${name}" (${type}) connected`, 'success');
+  addLogEntry('data', `DB "${name}" [${type}] connected with ${records.toLocaleString()} records`);
+
+  document.getElementById('dbName').value = '';
+  document.getElementById('dbRecords').value = '';
+}
+
+function updateDatabaseStats() {
+  STATE.databases.forEach(db => {
+    db.records += Math.floor(Math.random() * 50);
+    db.usagePct = Math.min(99, db.usagePct + (Math.random() > 0.5 ? 1 : -1));
+  });
+  renderDatabases();
+  // If drill-down is open, refresh it
+  if (STATE.activeDrillDbId) renderDbDrillBody();
+}
+
+// ===== DB DRILL-DOWN =====
+const DB_ICONS_MAP = { PostgreSQL: '🐘', MongoDB: '🍃', Redis: '🔴', ClickHouse: '📊', Cassandra: '💎' };
+
+function openDbDrill(dbId) {
+  const db = STATE.databases.find(d => d.id === dbId);
+  if (!db) return;
+  STATE.activeDrillDbId = dbId;
+  STATE.activeDrillTab  = 'records';
+
+  document.getElementById('dbDrillTitle').textContent = `🗄️ ${db.name}`;
+  document.getElementById('dbDrillIcon').textContent  = DB_ICONS_MAP[db.type] || '🗄️';
+  document.getElementById('dbDrillName').textContent  = db.name;
+  document.getElementById('dbDrillRecords').textContent = db.records.toLocaleString();
+  document.getElementById('dbDrillTables').textContent  = db.tables;
+  document.getElementById('dbDrillUsage').textContent   = db.usagePct + '%';
+  document.getElementById('dbDrillType').textContent    = db.type;
+
+  // Count unique writers
+  const recs = STATE.dbRecords[dbId] || [];
+  const writers = new Set(recs.map(r => r.nodeName)).size;
+  document.getElementById('dbDrillWriters').textContent = writers || '—';
+
+  // Reset tab UI
+  document.querySelectorAll('.db-drill-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.db-drill-tab').classList.add('active');
+
+  renderDbDrillBody();
+  document.getElementById('dbDrillModal').classList.add('open');
+}
+
+function openFirstDb() {
+  if (STATE.databases.length > 0) openDbDrill(STATE.databases[0].id);
+}
+
+function switchDbTab(tab, btn) {
+  STATE.activeDrillTab = tab;
+  document.querySelectorAll('.db-drill-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderDbDrillBody();
+}
+
+function renderDbDrillBody() {
+  const body = document.getElementById('dbDrillBody');
+  const dbId = STATE.activeDrillDbId;
+  if (!dbId) return;
+  const db   = STATE.databases.find(d => d.id === dbId);
+  if (!db) return;
+  const recs = STATE.dbRecords[dbId] || [];
+
+  if (STATE.activeDrillTab === 'records') {
+    if (recs.length === 0) {
+      body.innerHTML = `<div style="padding:24px; text-align:center; font-family:var(--font-mono); font-size:0.72rem; color:var(--muted)">No records written yet. Events will appear here as they are stored.</div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div class="db-record-row header">
+        <span>Record ID</span><span>Event</span><span>Source Node</span><span>Time</span>
+      </div>
+      ${recs.slice(0,80).map(r => `
+        <div class="db-record-row">
+          <span class="db-rec-id">${r.recId}</span>
+          <span class="db-rec-event">${r.evName} <span style="color:var(--muted);">#${r.channel}</span></span>
+          <span class="db-rec-src">⬡ ${r.nodeName}</span>
+          <span class="db-rec-time">${r.time}</span>
+        </div>
+      `).join('')}
+    `;
+
+  } else if (STATE.activeDrillTab === 'access') {
+    // Who has access to this DB (subscribers + nodes that wrote to it)
+    const writers = [...new Map((recs).map(r => [r.nodeName, r])).values()];
+    const subs = STATE.subscribers.filter(s =>
+      db.name.includes(s.channel) || s.channel === 'global' || recs.some(r => r.channel === s.channel)
+    );
+    if (writers.length === 0 && subs.length === 0) {
+      body.innerHTML = `<div style="padding:24px; text-align:center; font-family:var(--font-mono); font-size:0.72rem; color:var(--muted)">No subscribers or nodes have accessed this database yet.</div>`;
+      return;
+    }
+    const ROLE_COLORS = { broker: '#00f5c4', worker: '#6c63ff', gateway: '#ffd93d', replica: '#ff6b6b' };
+    body.innerHTML = `
+      <div style="padding:8px 8px 4px; font-family:var(--font-mono); font-size:0.58rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; border-bottom:1px solid var(--border); background:var(--surface2);">Writing Nodes</div>
+      ${writers.map(r => {
+        const node = STATE.nodes.find(n => n.name === r.nodeName) || {};
+        const col  = ROLE_COLORS[node.role] || '#5a6a8a';
+        return `<div class="db-access-row">
+          <div class="db-access-dot" style="background:${col}; box-shadow:0 0 6px ${col}55;"></div>
+          <div class="db-access-name">${r.nodeName}</div>
+          <div class="db-access-type">${node.role || 'node'} · ${node.region || ''}</div>
+          <div class="db-access-perm perm-rw">READ/WRITE</div>
+        </div>`;
+      }).join('')}
+      <div style="padding:8px 8px 4px; font-family:var(--font-mono); font-size:0.58rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; border-bottom:1px solid var(--border); background:var(--surface2); margin-top:8px;">Subscribers with Access</div>
+      ${subs.length === 0
+        ? `<div style="padding:14px 8px; font-family:var(--font-mono); font-size:0.68rem; color:var(--muted);">No subscribers matched</div>`
+        : subs.map(s => `<div class="db-access-row">
+          <div class="db-access-dot" style="background:${s.color}; box-shadow:0 0 6px ${s.color}55;"></div>
+          <div class="db-access-name">${s.name}</div>
+          <div class="db-access-type">subscriber · #${s.channel}</div>
+          <div class="db-access-perm perm-r">READ</div>
+        </div>`).join('')
+      }
+    `;
+
+  } else if (STATE.activeDrillTab === 'nodes') {
+    // All nodes and whether they've written to this DB
+    body.innerHTML = STATE.nodes.map(n => {
+      const written = recs.filter(r => r.nodeName === n.name).length;
+      const ROLE_COLORS = { broker: '#00f5c4', worker: '#6c63ff', gateway: '#ffd93d', replica: '#ff6b6b' };
+      const col = ROLE_COLORS[n.role] || '#5a6a8a';
+      const pct  = STATE.totalNodePassed > 0 ? Math.round((n.passPct / STATE.totalNodePassed) * 100) : 0;
+      return `<div class="db-access-row" style="display:grid; grid-template-columns:10px 1fr auto auto; gap:10px; align-items:center;">
+        <div class="db-access-dot" style="background:${n.status==='online'?col:'#5a6a8a'}; ${n.status==='online'?'animation:blink 1.4s ease-in-out infinite':''}"></div>
+        <div>
+          <div style="font-size:0.8rem; font-weight:600;">${n.name}</div>
+          <div style="font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);">${n.role} · ${n.region||''} · ${n.status}</div>
+          <div style="margin-top:4px; background:var(--border); border-radius:2px; height:3px; width:100%;">
+            <div style="height:100%;border-radius:2px;background:${col};width:${Math.min(100, pct*3)}%;transition:width 1s;"></div>
+          </div>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:0.7rem;color:${col};text-align:right;">${n.passPct||0} passed</div>
+        <div style="font-family:var(--font-mono);font-size:0.7rem;color:${written>0?'#b388ff':col};text-align:right;">${written} stored</div>
+      </div>`;
+    }).join('') || `<div style="padding:24px; text-align:center; font-family:var(--font-mono); font-size:0.72rem; color:var(--muted)">No nodes registered</div>`;
+  }
+}
+
+function exportDbData() {
+  const dbId = STATE.activeDrillDbId;
+  if (!dbId) return;
+  const db   = STATE.databases.find(d => d.id === dbId);
+  const recs = STATE.dbRecords[dbId] || [];
+  const data = { database: db, records: recs };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `${db.name}_export.json`;
+  a.click();
+  showToast(`Exported ${recs.length} records from ${db.name}`, 'success');
+}
+
+// ===== EVENT LOG (separate from main stream) =====
+function addLogEntry(type, msg) {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+  STATE.eventLog.unshift({ type, msg, time: timeStr });
+  renderEventLog();
+}
+
+function renderEventLog() {
+  const list  = document.getElementById('eventsLogList');
+  const empty = document.getElementById('eventsLogEmpty');
+
+  if (STATE.eventLog.length === 0) {
+    empty.style.display = 'flex';
+    list.querySelectorAll('.log-entry').forEach(e => e.remove());
+    return;
+  }
+  empty.style.display = 'none';
+  list.querySelectorAll('.log-entry').forEach(e => e.remove());
+
+  STATE.eventLog.slice(0, 100).forEach(entry => {
+    const div = document.createElement('div');
+    div.className = `log-entry log-${entry.type}`;
+    div.innerHTML = `
+      <span class="log-time">${entry.time}</span>
+      <span class="log-dot"></span>
+      <span class="log-msg">${entry.msg}</span>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function clearEventLog() {
+  STATE.eventLog = [];
+  renderEventLog();
+  showToast('Event log cleared', 'warn');
+}
+
+// ===== MAIN EVENT STREAM =====
+function renderEventStream() {
+  const stream = document.getElementById('eventStream');
+  const empty  = document.getElementById('emptyState');
+
+  let filtered = STATE.events;
+  if (STATE.activeChannel !== 'all') filtered = filtered.filter(e => e.channel === STATE.activeChannel);
+  if (STATE.filter !== 'all')        filtered = filtered.filter(e => e.type === STATE.filter);
+
+  if (filtered.length === 0) {
+    empty.style.display = 'flex';
+    stream.querySelectorAll('.event-card').forEach(c => c.remove());
+    return;
+  }
+  empty.style.display = 'none';
+  stream.querySelectorAll('.event-card').forEach(c => c.remove());
+  filtered.slice(0, 50).forEach(ev => stream.appendChild(createEventCard(ev)));
+}
+
+function createEventCard(ev) {
+  const div = document.createElement('div');
+  div.className = `event-card type-${ev.type}`;
+  div.id = `card_${ev.id}`;
+  const timeStr = ev.timestamp.toLocaleTimeString('en-US', { hour12: false });
+  const ch = STATE.channels.find(c => c.id === ev.channel);
+  const chColor = ch ? ch.color : '#5a6a8a';
+  const nodeName = ev.nodeName || 'broker-01';
+  div.innerHTML = `
+    <div class="event-icon type-${ev.type}">${ICONS[ev.type] || '📦'}</div>
+    <div class="event-body">
+      <div class="event-title">${ev.name}</div>
+      <div class="event-meta"><span style="color:${chColor}">#${ev.channel}</span> &nbsp;·&nbsp; ${ev.latency} &nbsp;·&nbsp; ${ev.id}</div>
+      <div class="event-payload">${ev.payload}</div>
+      <span class="event-node-tag">⬡ ${nodeName}</span>
+    </div>
+    <div class="event-right">
+      <div class="event-time">${timeStr}</div>
+      <div class="event-badge badge-${ev.type}">${ev.type}</div>
+      ${ev.priority === 'critical' ? '<div class="event-badge" style="background:rgba(255,107,107,0.2);color:#ff6b6b">CRITICAL</div>' : ''}
+    </div>
+  `;
+  return div;
+}
+
+function clearEventStream() {
+  STATE.events = [];
+  STATE.channels.forEach(ch => ch.count = 0);
+  STATE.totalEvents = 0;
+  updateStats();
+  renderChannels();
+  renderEventStream();
+  showToast('Event stream cleared', 'warn');
+  addLogEntry('system', 'Event stream manually cleared');
+}
+
+// ===== PUBLISH =====
+function publishEvent() {
+  const name     = document.getElementById('pubEventName').value.trim() || 'custom.event';
+  const channel  = document.getElementById('pubChannel').value;
+  const type     = document.getElementById('pubType').value;
+  const payload  = document.getElementById('pubPayload').value.trim() || '{}';
+  const priority = document.getElementById('pubPriority').value;
+
+  try { JSON.parse(payload); } catch(e) { showToast('Invalid JSON payload', 'error'); return; }
+
+  injectEvent({ name, channel, type, payload, priority });
+  closeModal('publishModal');
+  showToast(`Event "${name}" published to #${channel}`, 'success');
+
+  document.getElementById('pubEventName').value = '';
+  document.getElementById('pubPayload').value = '';
+}
+
+function quickPublish() {
+  const payload = document.getElementById('quickPayload').value.trim() || '{}';
+  const type    = document.getElementById('quickType').value;
+  const channel = document.getElementById('quickChannel').value;
+
+  try { JSON.parse(payload); } catch(e) { showToast('Invalid JSON payload', 'error'); return; }
+
+  injectEvent({ name: `${type}.event`, channel, type, payload });
+  document.getElementById('quickPayload').value = '';
+  showToast(`Quick event published to #${channel}`, 'success');
+}
+
+function autoEvent() {
+  if (STATE.paused) return;
+  const sample = SAMPLE_EVENTS[Math.floor(Math.random() * SAMPLE_EVENTS.length)];
+  injectEvent(sample);
+  updateEventsPerMin();
+}
+
+// ===== INJECT EVENT (central handler) =====
+function injectEvent(template) {
+  const ev = {
+    id: 'ev_' + Math.random().toString(36).slice(2, 8),
+    name:      template.name,
+    channel:   template.channel,
+    type:      template.type,
+    payload:   template.payload,
+    priority:  template.priority || 'normal',
+    timestamp: new Date(),
+    latency:   Math.floor(Math.random() * 30) + 5 + 'ms',
+  };
+
+  // Pass through nodes — get the processing node
+  const processingNode = passEventThroughNodes(ev);
+  ev.nodeId   = processingNode ? processingNode.id   : null;
+  ev.nodeName = processingNode ? processingNode.name : 'broker-01';
+
+  STATE.events.unshift(ev);
+  STATE.totalEvents++;
+
+  const ch = STATE.channels.find(c => c.id === ev.channel);
+  if (ch) ch.count++;
+
+  // Activity spike
+  if (STATE.activityData.length > 0) {
+    STATE.activityData[STATE.activityData.length - 1] = Math.min(10, (STATE.activityData[STATE.activityData.length - 1] || 0) + 3);
+  }
+
+  // Also log to Event Log tab
+  addLogEntry(ev.type, `[#${ev.channel}] ${ev.name} → ${ev.latency} via ${ev.nodeName}`);
+
+  // Write to matching databases and log the record
+  const timeStr = ev.timestamp.toLocaleTimeString('en-US', { hour12: false });
+  const recId   = 'rec_' + Math.random().toString(36).slice(2, 7);
+  STATE.databases.forEach(db => {
+    // Route: events_store gets all, analytics_db gets data/sync, others get their channel match
+    const shouldWrite =
+      db.name === 'events_store' ||
+      (db.name === 'analytics_db' && (ev.type === 'data' || ev.type === 'sync')) ||
+      (db.name === 'cache_layer'  && ev.type === 'system') ||
+      db.name.includes(ev.channel);
+
+    if (shouldWrite) {
+      db.records++;
+      if (!STATE.dbRecords[db.id]) STATE.dbRecords[db.id] = [];
+      STATE.dbRecords[db.id].unshift({
+        recId,
+        evName:   ev.name,
+        channel:  ev.channel,
+        nodeId:   ev.nodeId,
+        nodeName: ev.nodeName,
+        time:     timeStr,
+        payload:  ev.payload,
+      });
+      // Keep max 200 records per db
+      if (STATE.dbRecords[db.id].length > 200) STATE.dbRecords[db.id].pop();
+    }
+  });
+
+  // Refresh drill-down modal if open
+  if (STATE.activeDrillDbId) {
+    const db = STATE.databases.find(d => d.id === STATE.activeDrillDbId);
+    if (db) {
+      document.getElementById('dbDrillRecords').textContent = db.records.toLocaleString();
+      const recs    = STATE.dbRecords[STATE.activeDrillDbId] || [];
+      const writers = new Set(recs.map(r => r.nodeName)).size;
+      document.getElementById('dbDrillWriters').textContent = writers;
+      if (STATE.activeDrillTab === 'records' || STATE.activeDrillTab === 'nodes') renderDbDrillBody();
+    }
+  }
+
+  updateStats();
+  renderChannels();
+  renderEventStream();
+  animateBroker();
+}
+
+// ===== SUBSCRIBERS =====
+function addSubscriber() {
+  const name        = document.getElementById('subName').value.trim();
+  const channelName = document.getElementById('subChannelName').value.trim().toLowerCase();
+  const color       = document.getElementById('subColor').value;
+
+  if (!name || !channelName) { showToast('Name and channel required', 'error'); return; }
+
+  if (!STATE.channels.find(c => c.id === channelName)) {
+    STATE.channels.push({ id: channelName, name: channelName, color, count: 0, active: false });
+    updateChannelSelects();
+  }
+
+  STATE.subscribers.push({
+    id: 'sub_' + Math.random().toString(36).slice(2, 6),
+    name, channel: channelName, color,
+    ping: Math.floor(Math.random() * 50) + 5,
+  });
+
+  renderSubscribers();
+  renderChannels();
+  closeModal('subscribeModal');
+  showToast(`${name} subscribed to #${channelName}`, 'success');
+  addLogEntry('sync', `Subscriber "${name}" joined #${channelName}`);
+  document.getElementById('subName').value = '';
+  document.getElementById('subChannelName').value = '';
+}
+
+function renderSubscribers() {
+  const panel = document.getElementById('subscribersPanel');
+  panel.innerHTML = STATE.subscribers.map(s => `
+    <div class="subscriber-item">
+      <div class="sub-avatar" style="background:${s.color}22; color:${s.color}; border: 1px solid ${s.color}44">
+        ${s.name.charAt(0)}
+      </div>
+      <div class="sub-info">
+        <div class="sub-name">${s.name}</div>
+        <div class="sub-channel">#${s.channel}</div>
+      </div>
+      <div class="sub-ping">${s.ping}ms</div>
+    </div>
+  `).join('');
+  document.getElementById('statActive').textContent = STATE.subscribers.length;
+}
+
+// ===== FILTERS =====
+function setFilter(type, btn) {
+  STATE.filter = type;
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderEventStream();
+}
+
+// ===== MODALS =====
+function openPublishModal()  { document.getElementById('publishModal').classList.add('open'); }
+function openSubscribeModal(){ document.getElementById('subscribeModal').classList.add('open'); }
+function openAddNodeModal()  { document.getElementById('addNodeModal').classList.add('open'); }
+function openAddDbModal()    { document.getElementById('addDbModal').classList.add('open'); }
+function closeModal(id)      { document.getElementById(id).classList.remove('open'); }
+
+// ===== CHANNEL SELECTS =====
+function updateChannelSelects() {
+  const opts = STATE.channels.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('pubChannel').innerHTML = opts;
+  document.getElementById('quickChannel').innerHTML = opts;
+}
+
+// ===== STATS =====
+function updateStats() {
+  document.getElementById('statTotal').textContent = STATE.totalEvents;
+}
+
+function updateEventsPerMin() {
+  const rate = Math.floor(60000 / 3200);
+  document.getElementById('statRate').textContent = rate;
+  document.getElementById('headerEvents').textContent = `${rate} events/min`;
+}
+
+function updateUptime() {
+  const secs = Math.floor((Date.now() - STATE.startTime) / 1000);
+  let str;
+  if (secs < 60) str = `${secs}s`;
+  else if (secs < 3600) str = `${Math.floor(secs/60)}m ${secs%60}s`;
+  else str = `${Math.floor(secs/3600)}h ${Math.floor((secs%3600)/60)}m`;
+  document.getElementById('statUptime').textContent = str;
+}
+
+function updateLatency() {
+  const lat = Math.floor(Math.random() * 25) + 5;
+  document.getElementById('headerLatency').textContent = `~${lat}ms latency`;
+  STATE.subscribers.forEach(s => { s.ping = Math.floor(Math.random() * 50) + 5; });
+  renderSubscribers();
+}
+
+// ===== ACTIVITY BARS =====
+function initActivityBars() {
+  const bars = document.getElementById('activityBars');
+  bars.innerHTML = STATE.activityData.map((v, i) =>
+    `<div class="activity-bar" id="abar_${i}" style="height: ${Math.max(3, v * 4)}px"></div>`
+  ).join('');
+}
+
+function updateActivityBars() {
+  STATE.activityData.shift();
+  STATE.activityData.push(Math.floor(Math.random() * 10));
+  STATE.activityData.forEach((v, i) => {
+    const bar = document.getElementById(`abar_${i}`);
+    if (bar) {
+      bar.style.height = Math.max(3, v * 4) + 'px';
+      bar.classList.toggle('active-bar', v > 5);
+    }
+  });
+}
+
+// ===== BROKER ANIMATION =====
+function animateBroker() {
+  const broker = document.getElementById('archBroker');
+  broker.style.boxShadow = '0 0 20px rgba(0,245,196,0.5)';
+  broker.style.borderColor = 'var(--accent)';
+  setTimeout(() => { broker.style.boxShadow = ''; broker.style.borderColor = ''; }, 400);
+}
+
+// ===== TOAST =====
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type === 'error' ? 'error' : type === 'warn' ? 'warn' : ''}`;
+  const icons = { success: '✓', error: '✕', warn: '!' };
+  toast.innerHTML = `<span style="color:var(--accent)">${icons[type] || '✓'}</span> ${msg}`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(20px)';
+    toast.style.transition = 'all 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ===== TOGGLE STREAM =====
+function toggleStream() {
+  STATE.paused = !STATE.paused;
+  const btn      = document.getElementById('toggleStreamBtn');
+  const statusEl = document.getElementById('headerStatus');
+  const dotEl    = document.querySelector('.status-dot');
+
+  if (STATE.paused) {
+    clearInterval(STATE.autoEventTimer);
+    STATE.autoEventTimer = null;
+    btn.textContent = '▶ Resume';
+    btn.classList.add('stopped');
+    statusEl.textContent = 'PAUSED';
+    statusEl.style.color = 'var(--accent4)';
+    if (dotEl) { dotEl.style.background = 'var(--accent4)'; dotEl.style.animationPlayState = 'paused'; }
+    showToast('Event stream paused', 'warn');
+    addLogEntry('system', 'Stream paused by user');
+  } else {
+    STATE.autoEventTimer = setInterval(autoEvent, 3200);
+    btn.textContent = '⏸ Pause';
+    btn.classList.remove('stopped');
+    statusEl.textContent = 'LIVE';
+    statusEl.style.color = 'var(--accent)';
+    if (dotEl) { dotEl.style.background = 'var(--accent)'; dotEl.style.animationPlayState = 'running'; }
+    showToast('Event stream resumed', 'success');
+    addLogEntry('system', 'Stream resumed by user');
+  }
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  if (e.key === 'p' && e.metaKey) { e.preventDefault(); openPublishModal(); }
+  if (e.key === 'n' && e.metaKey) { e.preventDefault(); openAddNodeModal(); }
+});
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+document.getElementById('quickPayload').addEventListener('keydown', e => {
+  if (e.key === 'Enter') quickPublish();
+});
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>
